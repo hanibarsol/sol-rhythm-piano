@@ -446,7 +446,7 @@
         <button id="mode-watch" class="mode-btn active">👀 צפייה</button>
         <button id="mode-practice" class="mode-btn">🎹 תרגול</button>
         <div id="audio-toggle-wrap" class="hidden">
-            <button id="audio-toggle" title="ליווי קול">🔇</button>
+            <button id="audio-toggle" class="active" title="ליווי קול">🔊</button>
             <span id="audio-toggle-label">חני, תשירי ותנגני איתי</span>
         </div>
     </div>
@@ -515,11 +515,11 @@
     // becomes the main thing to look at, so eyes don't have to jump
     // between a video up top and a keyboard down below.
     let mode = 'watch';
-    // Practice-only: whether the video's own audio (song + Hani singing
-    // along) plays while the child practices, independent of the piano's
-    // own sound. Defaults OFF — nothing plays unasked; a child/parent who
-    // wants the singing accompaniment switches it on deliberately.
-    let audioOn = false;
+    // Page-specific override: this rhythm lesson is built around repeating
+    // after Hani's counting/narration, so unlike the other songs the
+    // accompaniment defaults ON here — it's core to the exercise, not an
+    // optional extra.
+    let audioOn = true;
     function applyAudioState() {
         if (!player) return;
         if (mode === 'practice' && !audioOn) {
