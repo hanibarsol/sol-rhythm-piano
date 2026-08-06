@@ -205,6 +205,36 @@
             pointer-events: none;
         }
         #practice-hint.hidden { opacity: 0; }
+        /* "Your turn" banner: a call-and-response round is open — reproduce
+           this sequence at your own pace, not tied to a falling-note
+           timestamp like the other songs. One icon per expected note,
+           left-to-right in play order, lighting up as each is hit. */
+        #echo-banner {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            padding: 8px 0;
+        }
+        #echo-banner.hidden { display: none; }
+        .echo-icon {
+            width: calc(var(--white-w) * 0.55);
+            height: calc(var(--white-w) * 0.55);
+            border-radius: 50%;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.3);
+            opacity: 0.55;
+            filter: grayscale(70%);
+            transition: opacity 0.2s ease, filter 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+            background: #333;
+        }
+        .echo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .echo-icon.done {
+            opacity: 1;
+            filter: none;
+            border-color: #29c98f;
+            box-shadow: 0 0 8px 2px rgba(41,201,143,0.7);
+            transform: scale(1.12);
+        }
         /* Note lane: sits directly above the keys (not up near the video),
            so a child's eyes barely have to move between "what's coming"
            and "where to press." Column widths mirror the white keys below
@@ -463,6 +493,7 @@
                 <div id="cabinet-lip"></div>
                 <div id="keywell">
                     <div id="practice-hint" class="hidden">לחצי על הקליד כשהדמות מגיעה לקו! 👇</div>
+                    <div id="echo-banner" class="hidden"></div>
                     <div id="note-lane" class="hidden"></div>
                     <div class="piano" id="piano"></div>
                 </div>
@@ -732,6 +763,74 @@
     const keyByNote = {};
 
     const characterImages = ["דו.png", "רה.png", "מי.png", "פה.png", "סול.png", "לה.png", "סי.png"];
+    const ECHO_LETTER_ORDER = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
+    // "Echo" rounds: Hani plays a short phrase on camera, then says "now
+    // it's your turn" — a window opens where the child can reproduce the
+    // same phrase at their own pace. Unlike the other songs, there's no
+    // single correct instant per note here, just "the right notes, in
+    // order, before the window closes."
+    const echoRounds = [
+        { start: 50.59, notes: ['C', 'C', 'C'] },
+        { start: 58.65, notes: ['C', 'D', 'E'] },
+        { start: 66.83, notes: ['E', 'F', 'G'] },
+        { start: 79.17, notes: ['G', 'F', 'E', 'D', 'C'] },
+    ];
+    const ECHO_WINDOW = 7.5; // seconds a "your turn" window stays open
+    let activeEchoRound = -1;
+    let echoNoteIdx = 0;
+    const echoBanner = document.getElementById('echo-banner');
+
+    function renderEchoBanner(t) {
+        let idx = -1;
+        for (let i = 0; i < echoRounds.length; i++) {
+            if (t >= echoRounds[i].start && t < echoRounds[i].start + ECHO_WINDOW) { idx = i; break; }
+        }
+        if (idx !== activeEchoRound) {
+            activeEchoRound = idx;
+            echoNoteIdx = 0;
+            echoBanner.innerHTML = '';
+            if (idx !== -1) {
+                echoRounds[idx].notes.forEach((letter) => {
+                    const icon = document.createElement('div');
+                    icon.className = 'echo-icon';
+                    const img = document.createElement('img');
+                    img.src = characterImages[ECHO_LETTER_ORDER.indexOf(letter)] || '';
+                    icon.appendChild(img);
+                    echoBanner.appendChild(icon);
+                });
+            }
+        }
+        echoBanner.classList.toggle('hidden', idx === -1);
+    }
+
+    // Returns true if this press was the correct next note in the open
+    // round's sequence (so the caller knows whether to celebrate it).
+    function echoTryNote(letter) {
+        if (activeEchoRound === -1) return false;
+        const round = echoRounds[activeEchoRound];
+        if (echoNoteIdx >= round.notes.length) return false;
+        if (letter !== round.notes[echoNoteIdx]) return false;
+        const icon = echoBanner.children[echoNoteIdx];
+        if (icon) icon.classList.add('done');
+        echoNoteIdx++;
+        return true;
+    }
+
+    // Shared correct-note celebration (star, key flash, water fill) — used
+    // both by the timestamp-based songNotes feedback and the echo rounds.
+    function celebrateCorrect(key, fullNote) {
+        fillKey(fullNote);
+        key.classList.add('correct-flash');
+        const star = document.createElement('div');
+        star.className = 'star-pop';
+        star.textContent = '⭐';
+        key.appendChild(star);
+        setTimeout(() => {
+            key.classList.remove('correct-flash');
+            star.remove();
+        }, 550);
+    }
 
     // Map every note to its real recorded sample (24 files exist in sounds/,
     // the previous version only wired up 4 of them and let Tone.js pitch-shift the rest).
@@ -1046,18 +1145,14 @@
                         if (t >= cur.time - NOTE_LEAD && t <= cur.time + NOTE_TAIL) {
                             songHit = true;
                             markTileHit(songIdx);
-                            fillKey(fullNote);
-                            key.classList.add('correct-flash');
-                            const star = document.createElement('div');
-                            star.className = 'star-pop';
-                            star.textContent = '⭐';
-                            key.appendChild(star);
-                            setTimeout(() => {
-                                key.classList.remove('correct-flash');
-                                star.remove();
-                            }, 550);
+                            celebrateCorrect(key, fullNote);
                         }
                     }
+                }
+
+                // "Your turn" echo rounds — open-ended, no per-note timing.
+                if (echoTryNote(fullNote[0])) {
+                    celebrateCorrect(key, fullNote);
                 }
             };
 
@@ -1172,7 +1267,11 @@
 
 
     (function fallLoop() {
-        if (player && player.getCurrentTime) renderFallingLane(player.getCurrentTime());
+        if (player && player.getCurrentTime) {
+            const t = player.getCurrentTime();
+            renderFallingLane(t);
+            renderEchoBanner(t);
+        }
         requestAnimationFrame(fallLoop);
     })();
 
