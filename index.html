@@ -65,9 +65,36 @@
            Hani singing along) is heard while the child plays, independent
            of the piano's own sound. Off by default — a deliberate choice
            the child/parent opts into, not something playing unasked.
-           Hidden outside practice mode. Same pill shape as the mode
-           buttons (.mode-btn) — just blue instead of teal when on. */
-        #audio-toggle {
+           Hidden outside practice mode. The label always looks like a
+           plain .mode-btn (gray, never changes) — only the small round
+           icon next to it carries the LED on/off color. */
+        #audio-toggle-wrap {
+            touch-action: auto;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+        #audio-toggle-wrap.hidden { display: none; }
+        #audio-toggle-icon {
+            touch-action: auto;
+            width: 40px; height: 40px;
+            flex: 0 0 auto;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: #262626;
+            color: rgba(255,255,255,0.35);
+            font-size: 17px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #audio-toggle-icon.active {
+            background: radial-gradient(circle at 35% 30%, #4fa3ff, #1a5fc4 75%);
+            border-color: #7ec4ff;
+            color: #fff;
+            box-shadow: 0 0 8px 2px rgba(79,163,255,0.75);
+        }
+        #audio-toggle-label {
             touch-action: auto;
             border: 1px solid rgba(255,255,255,0.12);
             border-radius: 20px;
@@ -78,14 +105,6 @@
             color: rgba(255,255,255,0.6);
             cursor: pointer;
             white-space: nowrap;
-        }
-        #audio-toggle.hidden { display: none; }
-        #audio-toggle.active {
-            background: #2f7dff;
-            color: #fff;
-            border-color: #7ec4ff;
-            font-weight: bold;
-            box-shadow: 0 0 8px 2px rgba(79,163,255,0.55);
         }
 
         #speed-bar {
@@ -205,8 +224,14 @@
             justify-content: center;
             gap: 8px;
             padding: 8px 0;
+            /* Fixed regardless of content, and hidden via visibility (not
+               display:none) — the piano was visibly "jumping" up and down
+               each time a round opened/closed because this row's height
+               used to appear and disappear under it. */
+            min-height: calc(var(--white-w) * 0.55 + 16px);
+            visibility: visible;
         }
-        #echo-banner.hidden { display: none; }
+        #echo-banner.hidden { visibility: hidden; }
         .echo-icon {
             width: calc(var(--white-w) * 0.55);
             height: calc(var(--white-w) * 0.55);
@@ -466,7 +491,10 @@
     <div id="mode-bar">
         <button id="mode-watch" class="mode-btn active">👀 צפייה</button>
         <button id="mode-practice" class="mode-btn">🎹 תרגול</button>
-        <button id="audio-toggle" class="hidden active" title="ליווי קול">🔊 חני, תשירי ותנגני איתי</button>
+        <div id="audio-toggle-wrap" class="hidden">
+            <button id="audio-toggle-icon" class="active" title="ליווי קול">🔊</button>
+            <span id="audio-toggle-label">חני, תשירי ותנגני איתי</span>
+        </div>
     </div>
     <div id="speed-bar">
         <button id="play-pause" class="speed-step-btn">⏸</button>
@@ -480,7 +508,7 @@
             <div id="cabinet">
                 <div id="cabinet-lip"></div>
                 <div id="keywell">
-                    <div id="practice-hint" class="hidden">לחצו על הקליד כשהדמות מגיעה לקו! 👇</div>
+                    <div id="practice-hint" class="hidden">לחצו על הקליד כשהדמות מגיעה לקו&#8207;! 👇</div>
                     <div id="echo-banner" class="hidden"></div>
                     <div id="note-lane" class="hidden"></div>
                     <div class="piano" id="piano"></div>
@@ -775,14 +803,17 @@
         { start: 66.83, notes: ['E', 'F', 'G'] },
         { start: 79.17, notes: ['G', 'F', 'E', 'D', 'C'] },
     ];
-    const ECHO_WINDOW = 7.5; // seconds a "your turn" window stays open
+    const ECHO_WINDOW = 10; // seconds a "your turn" window stays open
     let activeEchoRound = -1;
     let echoNoteIdx = 0;
     const echoBanner = document.getElementById('echo-banner');
 
     function renderEchoBanner(t) {
+        // Search from the last round backward, so if two windows overlap
+        // (a longer window can now run past the next round's start), the
+        // most recently-started round wins rather than a stale earlier one.
         let idx = -1;
-        for (let i = 0; i < echoRounds.length; i++) {
+        for (let i = echoRounds.length - 1; i >= 0; i--) {
             if (t >= echoRounds[i].start && t < echoRounds[i].start + ECHO_WINDOW) { idx = i; break; }
         }
         if (idx !== activeEchoRound) {
